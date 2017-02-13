@@ -44,6 +44,56 @@ i2c mm 0x43 0x16.1   # msp430 is i2c device 0x43 and 0x16 is the command
 
 In practice though it seems the initial bus probe is sufficient.
 
+# Patching kernel
+
+The official kobo provided kernel can be downloaded from here
+
+https://github.com/kobolabs/Kobo-Reader/tree/master/hw/imx507-aura
+
+The following configuration options have to be enabled
+
+CONFIG_USB_EHCI_ARC_OTG=y
+CONFIG_USB_EHCI_FSL_UTMI=y
+
+It may be desirable to enable additional debugging as well
+
+CONFIG_USB_DEBUG=y
+CONFIG_USB_ANNOUNCE_NEW_DEVICES=y
+
+The system will still hang with "mma7660 sensor triggered ..."
+followed by "usb unpluggged" unless two of the patches identified by
+CazYokoyama are also applied.
+
+--- a/arch/arm/plat-mxc/usb_common.c
++++ b/arch/arm/plat-mxc/usb_common.c
+@@ -338,7 +338,7 @@ static void usbh1_set_utmi_xcvr(void)
+         */
+        msleep(100);
+        
+-#if 1
++#if 0
+        // force suspend otg port 
+        printk ("[%s-%d] %s() \n",__FILE__,__LINE__,__func__);
+        USB_PHY_CTR_FUNC |= USB_UTMI_PHYCTRL_OC_DIS;
+--- a/drivers/usb/core/hcd.c
++++ b/drivers/usb/core/hcd.c
+@@ -2065,6 +2065,7 @@ irqreturn_t usb_hcd_irq (int irq, void *__hcd)
+ 
+        if (unlikely(hcd->state == HC_STATE_HALT ||
+                     !test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags))) {
++                schedule_work(&hcd->wakeup_work);
+                rc = IRQ_NONE;
+        } else if (hcd->driver->irq(hcd) == IRQ_NONE) {
+                rc = IRQ_NONE;
+
+https://github.com/ifly7charlie/XCSoar-Kobo-Build/commits/AX8817X
+https://github.com/brunotl/kernel-kobo-mx50-ntx/commits/master
+
+CazYokoyama has an additional patch to "not activate acin_pg
+interrupt, i.e.  plugin USB connector".  Likely this will get rid of
+the kernel interrupt and nobody cared messages, but I haven't tried
+it.
+
 # Compiling a kernel
 
 The kernel has to be compiled with a 4.x gcc.  This can be obtained
@@ -94,88 +144,3 @@ includes appending mx50_1GHz to the end which screws up using
 init=/bin/sh in an emergency.  This can be worked around with
 
 init=/bin/sh -c sh
-
-The system currently hangs after "mma7660 sensor triggered ..." the
-next message from the original kernel is "usb unpluggged" so likely
-there are issues with the modified USB stack.
-
-- works with a recompilation of the existing config
-- add support for DP host port on freescale controller
-* internal UTMI transceiver hangs
-* philips ISP1301 transceiver hangs
-* freescale MC13783 transceiver hangs
-- just "support for fresscale on-chip EHCI USB controller" doesn't compile
-- could it just be low power?? -- doesn't seem to be (plugging in doesn't help)
-- remove root hub transaction translate (only tried UTMI transceiver)
-
-drivers/usb/host/Kconfig
-CONFIG_USB_EHCI_ARC_OTG - enable support for USB OTG port in HS/FS mode
-CONFIG_USB_EHCI_FSL_UTMI - enable support for the on-chip High Speed UTMI transceiver
-./arch/arm/mach-mx5/usb_dr.c
-
-stuff from arch/arm/mach-mx5 (more stuff in arch/arm/plat-mxc too)
-
-CONFIG_MMU=y
-CONFIG_ARCH_MXC=y
-
-- system.o iomux.o cpu.o mm.o devices.o serial.o dma.o lpmodes.o pm.o sdram_autogating.o bus_freq.o usb_dr.o usb_h1.o usb_h2.o dummy_gpio.o  early_setup.o
-
-CONFIG_ARCH_MX5=y
-CONFIG_ARCH_MX51=y - clock.o suspend.o
-CONFIG_ARCH_MX53=y - clock.o suspend.o mx53_wp.o pm_da9053.o
-CONFIG_ARCH_MX50=y - clock_mx50.o dmaengine.o dma-apbh.o mx50_suspend.o mx50_freq.o mx50_ddr_freq.o mx50_wfi.o mx50_ntx_io.o
-CONFIG_MACH_MX51_BABBAGE=y - mx51_babbage.o mx51_babbage_pmic_mc13892.o
-CONFIG_MACH_MX53_EVK=y - mx53_evk.o mx53_evk_pmic_mc13892.o
-CONFIG_MACH_MX53_ARD=y - mx53_ard.o mx53_ard_pmic_ltc3589.o
-CONFIG_MACH_MX50_ARM2=y - mx50_arm2.o mx50_arm2_pmic_mc13892.o
-CONFIG_MACH_MX50_RDP=y - mx50_rdp.o mx50_rdp_pmic_mc13892.o ntx_hwconfig.o
-
-
-system.c
-iomux.c
-cpu.c
-mm.c
-devices.c
-serial.c
-dma.c
-lpmodes.c
-pm.c
-sdram_autogating.c
-bus_freq.c
-usb_dr.c
-usb_h1.c
-usb_h2.c
-dummy_gpio.c
-early_setup.c
-clock.c
-suspend.c
-clock.c
-suspend.c
-mx53_wp.c
-pm_da9053.c
-clock_mx50.c
-dmaengine.c
-dma-apbh.c
-mx50_suspend.c
-mx50_freq.c
-mx50_ddr_freq.c
-mx50_wfi.c
-mx50_ntx_io.c
-mx51_babbage.c
-mx51_babbage_pmic_mc13892.c
-mx53_evk.c
-mx53_evk_pmic_mc13892.c
-mx53_ard.c
-mx53_ard_pmic_ltc3589.c
-mx50_arm2.c
-mx50_arm2_pmic_mc13892.c
-mx50_rdp.c
-mx50_rdp_pmic_mc13892.c
-ntx_hwconfig.c
-
-
-VERSION = 2
-PATCHLEVEL = 6
-SUBLEVEL = 35
-EXTRAVERSION = .3
-NAME = Sheep on Meth
