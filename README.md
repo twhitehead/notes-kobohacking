@@ -78,14 +78,14 @@ after (have had correuption in many larger transfers).
 
 # U-boot
 
-The default u-boot environment loads 4MiB from mmcblk0+1MiB and boots
-it with root=/dev/mmcblk0p1.  It seems likely that holding down an
+The default u-boot environment loads 4MiB from `mmcblk0`+1MiB and boots
+it with `root=/dev/mmcblk0p1`.  It seems likely that holding down an
 external button ((e.g., backlight for Glo and Aura) will switch this
-to root=/dev/mmcblk0p2.  This image re-images mmcblk0p1 and mmcblk0p2.
+to `root=/dev/mmcblk0p2`.  This image re-images `mmcblk0p1` and `mmcblk0p2`.
 
-To do more it is nessesary to change bootdelay=0 to bootdelay=1 (or a
+To do more it is nessesary to change `bootdelay=0` to `bootdelay=1` (or a
 larger number) in the u-boot environment.  This will cause u-boot to
-wait 1 second before running the bootcmd.  If any data is received on
+wait 1 second before running the `bootcmd`.  If any data is received on
 the serial port in this time, it will drop to the u-boot command line.
 
 ## Watchdog
@@ -122,12 +122,12 @@ In practice though it seems the initial bus probe is sufficient.
 
 ## Modifying the environment
 
-The environment is 128KiB and stored a mmcblk0+768KiB.  It consists of
+The environment is 128KiB and stored a `mmcblk0`+768KiB.  It consists of
 a (little endian) crc32 checksum followed by a series of NULL
 seperated key=value pairs.  It is NULL padded to the full length
 (minus the checksum).  The checksum is over the values and padding.
 
-A default environment emedded in u-boot (mmcblk0+0x22dd8) is used if
+A default environment emedded in u-boot (`mmcblk0`+0x22dd8) is used if
 it does not match.  It has bootdelay=1 set and so can be interrupted.
 A simple way to get into u-boot then is to invalided the checksum.  It
 can then be setup in u-boot and saved with the writeenv command.
@@ -156,10 +156,10 @@ dd if=config.raw of=/dev/mmcblk0 bs=1024 seek=768 count=128
 
 Kobo updates will update the u-boot and the kernel areas but does not
 touch the environment.  The default environment normal boots with root
-set to mmcblk0p1.  Holding a specific external button while booting
-(e.g., backlight for Glo and Aura) should switch this to mmcblk0p2.
+set to `mmcblk0p1`.  Holding a specific external button while booting
+(e.g., backlight for Glo and Aura) should switch this to `mmcblk0p2`.
 
-The default mmcblk0p2 rootfs image re-images mmcblk0p1 and mmcblk0p2.
+The default `mmcblk0p2` rootfs image re-images `mmcblk0p1` and `mmcblk0p2`.
 
 ## A better u-boot
 
@@ -211,13 +211,13 @@ mkimage -A arm -O linux -T script -C none -a 0 -e 0 -n 'u-boot script' -d script
 
 The load and source commands fall through if uScript cannot be found,
 and the boot boots as normal.  The advantage here is arbitrary u-boot
-commands can be run.  This means, for example, root=/dev/mmcblk1p3
+commands can be run.  This means, for example, `root=/dev/mmcblk1p3`
 could be passed so everything will run off the external SD card making
 it possible to leave the Kobo image entirely untouched.
 
 An example script that optionally override the kernel from a uImage
 file (note again that external SD mmc device number varies) if it
-exists and boot with root=/dev/mmcblk1p1 (see bootargs_SD) is
+exists and boot with `root=/dev/mmcblk1p1` (see bootargs_SD) is
 
 ```
 run bootargs_base bootargs_SD; fatload mmc 0:3 ${loadaddr} uImage
