@@ -244,8 +244,19 @@ CONFIG_USB_ANNOUNCE_NEW_DEVICES=y
 ```
 
 The system will still hang with "mma7660 sensor triggered ..."
-followed by "usb unpluggged" unless two of the patches identified by
-CazYokoyama are also applied.
+followed by "usb unpluggged".  CazYokoyama determined the issue was
+the wakeup routine wasn't running and did a bit of hack that manually
+scheduled it from an interrupt service routine to get around this
+
+https://github.com/ifly7charlie/XCSoar-Kobo-Build/commits/AX8817X
+
+https://github.com/brunotl/kernel-kobo-mx50-ntx/commits/master
+
+After quite a bit of digging, I determined the reason for this was
+there was a bitmask screw up and the interupt determination code was
+relying exclusively on the ID bit (which is permantely pulled high on
+the Kobo because it is lefted unconnected)
+
 
 ```
 --- a/arch/arm/plat-mxc/usb_common.c
@@ -259,25 +270,95 @@ CazYokoyama are also applied.
         // force suspend otg port 
         printk ("[%s-%d] %s() \n",__FILE__,__LINE__,__func__);
         USB_PHY_CTR_FUNC |= USB_UTMI_PHYCTRL_OC_DIS;
---- a/drivers/usb/core/hcd.c
-+++ b/drivers/usb/core/hcd.c
-@@ -2065,6 +2065,7 @@ irqreturn_t usb_hcd_irq (int irq, void *__hcd)
+--- a/drivers/usb/otg/fsl_otg.c
++++ b/drivers/usb/otg/fsl_otg.c
+@@ -1070,7 +1070,7 @@ int usb_otg_start(struct platform_device *pdev)
+ 	temp = readl(&p_otg->dr_mem_map->otgsc);
+ 	if (!pdata->id_gpio)
+ 		temp |= OTGSC_INTR_USB_ID_EN;
+-	temp &= ~(OTGSC_CTRL_VBUS_DISCHARGE | OTGSC_INTR_1MS_TIMER_EN);
++	temp &= ~OTGSC_CTRL_VBUS_DISCHARGE;
  
-        if (unlikely(hcd->state == HC_STATE_HALT ||
-                     !test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags))) {
-+                schedule_work(&hcd->wakeup_work);
-                rc = IRQ_NONE;
-        } else if (hcd->driver->irq(hcd) == IRQ_NONE) {
-                rc = IRQ_NONE;
+ 	writel(temp, &p_otg->dr_mem_map->otgsc);
+ 
+diff --git a/drivers/usb/otg/fsl_otg.h b/drivers/usb/otg/fsl_otg.h
+index 0857a53e6fad..64b24ee53ae7 100644
+--- a/drivers/usb/otg/fsl_otg.h
++++ b/drivers/usb/otg/fsl_otg.h
+@@ -237,7 +237,7 @@
+ /* OTG interrupt status bit masks */
+ #define  OTGSC_INTERRUPT_STATUS_BITS_MASK  \
+ 	(OTGSC_INTSTS_USB_ID          |    \
+-	OTGSC_INTR_1MS_TIMER_EN       |    \
++	OTGSC_INTSTS_1MS              |    \
+ 	OTGSC_INTSTS_A_VBUS_VALID     |    \
+ 	OTGSC_INTSTS_A_SESSION_VALID  |    \
+ 	OTGSC_INTSTS_B_SESSION_VALID  |    \
+--- a/arch/arm/mach-mx5/usb_dr.c
++++ b/arch/arm/mach-mx5/usb_dr.c
+@@ -204,18 +204,35 @@ static void _host_phy_lowpower_suspend(struct fsl_usb2_platform_data *pdata, boo
+ static enum usb_wakeup_event _is_host_wakeup(struct fsl_usb2_platform_data *pdata)
+ {
+ 	int wakeup_req = USBCTRL & UCTRL_OWIR;
+-	int otgsc = UOG_OTGSC;
+-
+-	/* if ID change sts, it is a host wakeup event */
+-	if (wakeup_req && (otgsc & OTGSC_IS_USB_ID)) {
+-		printk(KERN_INFO "otg host ID wakeup\n");
+-		/* if host ID wakeup, we must clear the b session change sts */
+-		UOG_OTGSC = otgsc & (~OTGSC_IS_USB_ID);
+-		return WAKEUP_EVENT_ID;
+-	}
+-	if (wakeup_req && (!(otgsc & OTGSC_STS_USB_ID))) {
+-		printk(KERN_INFO "otg host Remote wakeup\n");
+-		return WAKEUP_EVENT_DPDM;
++	int portsc = UOG_PORTSC1;
++	int usbsts = UOG_USBSTS;
++
++	/* if there has been a port change detect, it is for us */
++	if (wakeup_req && (usbsts & USBSTS_PCI)) {
++		/* Original ID only code said: if host ID wakeup, we must clear the b session change sts
++
++                   This is not done (seems to still work).  Original code also never cleared the ID
++                   interrupt status though (nor did the driver), so it figured everything was ID. */
++		if (portsc & PORTSC_CONNECT_STATUS_CHANGE) {
++			if (portsc & PORTSC_WKCN_EN && portsc & PORTSC_CURRENT_CONNECT_STATUS) {
++				printk(KERN_INFO "otg host connect wakeup\n");
++			}
++			if (portsc & PORTSC_WKDC_EN && !(portsc & PORTSC_CURRENT_CONNECT_STATUS)) {
++				printk(KERN_INFO "otg host disconnect wakeup\n");
++			}
++			return WAKEUP_EVENT_ID;    /* not really, but the type isn't used anyway */
++		}
++		if (portsc & PORTSC_OVER_CURRENT_CHG && portsc & PORTSC_WKOC_EN && portsc & PORTSC_OVER_CURRENT_ACT) {
++			printk(KERN_INFO "otg host over current wakeup\n");
++			return WAKEUP_EVENT_DPDM;  /* not really, but the type isn't used anyway */
++		}
++		if (portsc & PORTSC_PORT_FORCE_RESUME) {
++			printk(KERN_INFO "otg host device resume wakeup\n");
++			return WAKEUP_EVENT_DPDM;
++		}
++
++		printk(KERN_INFO "otg host unknown wakeup\n");
++		return WAKEUP_EVENT_DPDM;  /* not really, but the type isn't used anyway */
+ 	}
+ 
+ 	return WAKEUP_EVENT_INVALID;
+diff --git a/arch/arm/plat-mxc/include/mach/arc_otg.h b/arch/arm/plat-mxc/include/mach/arc_otg.h
+index 8e1c4cd0ca96..fad1def30d08 100644
+--- a/arch/arm/plat-mxc/include/mach/arc_otg.h
++++ b/arch/arm/plat-mxc/include/mach/arc_otg.h
+@@ -166,6 +166,9 @@ extern volatile u32 *mx3_usb_otg_addr;
+ #define PORTSC_STS			(1 << 29)	/* serial xcvr select */
+ #define PORTSC_PTW                      (1 << 28)       /* UTMI width */
+ #define PORTSC_PHCD                     (1 << 23)       /* Low Power Suspend */
++#define PORTSC_WKOC_EN                  (1 << 22)       /* Wake on Over-current Enable */
++#define PORTSC_WKDC_EN                  (1 << 21)       /* Wake on Disconnect Enable */
++#define PORTSC_WKCN_EN                  (1 << 20)       /* Wake on Connect Enable */
+ #define PORTSC_PORT_POWER		(1 << 12)	/* port power */
+ #define PORTSC_LS_MASK			(3 << 10)	/* Line State mask */
+ #define PORTSC_LS_SE0			(0 << 10)	/* SE0     */
 ```
-
-https://github.com/ifly7charlie/XCSoar-Kobo-Build/commits/AX8817X
-https://github.com/brunotl/kernel-kobo-mx50-ntx/commits/master
-
-CazYokoyama has an additional patch to "not activate acin_pg
-interrupt, i.e.  plugin USB connector".  Likely this will get rid of
-the kernel interrupt and nobody cared messages, but I haven't tried
-it.
 
 # Compiling a kernel
 
