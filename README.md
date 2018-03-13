@@ -2,18 +2,24 @@
 
 The kernel (assumed <= 4MiB by u-boot loader)
 
+```bash
 dd if=/dev/mmcblk0 bs=1024 skip=1024 count=4096
+```
 
 It is a u-boot legacy uImage.  Drop the first 64 bytes to get a
 standard zImage.
 
 U-boot (assumed <= 767KiB by layout)
 
+```bash
 dd if=/dev/mmcblk0 bs=1024 skip=1 count=767
+```
 
 U-boot environment (u-boot code is set for 128KiB)
 
+```bash
 dd if=/dev/mmcblk0 bs=1024 skip=768 count=128
+```
 
 # Connecting
 
@@ -22,15 +28,21 @@ http://www.cyberciti.biz/hardware/5-linux-unix-commands-for-connecting-to-the-se
 The stty command can be used to configure the serial port if raw
 reading/writing is desired
 
+```bash
 stty -F /dev/ttyUSB0 115200 raw pass8
+```
 
 The cu command gives an old school connection
 
+```bash
 cu -l /dev/ttyUSB0 -s 115200
+```
 
 or just use screen for something easy
 
+```bash
 screen /dev/ttyUSB0 115200
+```
 
 ctrl+a k -- quit
 ctrl+a H -- record
@@ -41,8 +53,10 @@ If it is through a getty it will fail (due to escaping?).  X-modem
 doesn't have error detection, so always a good idea to check a hash
 after (have had correuption in many larger transfers).
 
+```
 #::respawn:/sbin/getty -L ttymxc0 115200 vt100
 ::askfirst:-/bin/sh
+```
 
 # U-boot
 
@@ -65,20 +79,26 @@ over the i2c bus (from pmic_core_i2c.c) to disable it.
 
 Probing the bus gives a list of devices
 
+```
 i2c probe
+```
 
 Linux pulls the firmware version it reports (d726) from register 0.
 Reading address 0 from the i2c reveals it is chip 0x43.
 
+```
 i2c md 0x43 0x0.1 0x2
+```
 
 This should then do the watchdog disable as the kernel does it
 
+```
 i2c mm 0x43 0x16.1   # msp430 is i2c device 0x43 and 0x16 is the command
 0xff                 # argument is 0xff
 0x2a                 # lsb of crc-ccit 0xffff
 0xaa                 # msb of crc-ccit 0xffff
 .
+```
 
 In practice though it seems the initial bus probe is sufficient.
 
@@ -96,6 +116,7 @@ can then be setup in u-boot and saved with the writeenv command.
 
 It can also be created from a key=value CR separated pairs file
 
+```bash
 keyvals=""
 while read line; do
   keyvals="${keyvals}$(echo -n "$line" | xxd -p)00"
@@ -113,6 +134,7 @@ output="${keyvals}${padding:${#keyvals}+8}"
 } | xxd -r -p > config.raw
 
 dd if=config.raw of=/dev/mmcblk0 bs=1024 seek=768 count=128
+```
 
 Kobo updates will update the u-boot and the kernel areas but does not
 touch the environment.  The default environment normal boots with root
@@ -125,23 +147,31 @@ The default mmcblk0p2 rootfs image re-images mmcblk0p1 and mmcblk0p2.
 
 The builtin boot command does the following
 
+```
 mmc read 2 ${loadaddr} 0x800 0x2000
+```
 
 It is possible, however, to directly load a specific image off the
 onboard mnt partition (it has to be FAT as the ext2 commands just
 silently fail on the ext4 filesystem)
 
+```
 fatload mmc 2:3 ${loadaddr} uImage  # internal storage
+```
 
 or a plugged in SD card (the external SD mmc device number varies:
 Aura=0, Glo=1, etc.).  The command `fatls mmc 0:3` with an optional
 directory will list the contents of the file system.  Changing
 
+```
 bootcmd=run bootcmd_mmc
+```
 
 to
 
+```
 bootcmd=run bootargs_base bootargs_mmc; load_ntxkernel; mmc rescan 0; fatload mmc 0:3 ${loadaddr} uImage; bootm
+```
 
 will cause it to use uImage from the FAT formated 3rd partition on the
 external SD disk as the kernel if it exists and fall back to the
@@ -151,11 +181,15 @@ having to open up the Kobo and solder onto the serial port.
 An even more powerful option is to have it try and load a u-boot
 script for the external SD drive and execute it.
 
+```
 run bootargs_base bootargs_mmc; load_ntxkernel; mmc rescan 0; fatload mmc 0:3 0x70400000 uScript; source 0x70400000; bootm
+```
 
 The script is assembled using mkImage
 
+```bash
 mkimage -A arm -O linux -T script -C none -a 0 -e 0 -n 'u-boot script' -d script uScript
+```
 
 The load and source commands fall through if uScript cannot be found,
 and the boot boots as normal.  The advantage here is arbitrary u-boot
@@ -167,7 +201,9 @@ An example script that optionally override the kernel from a uImage
 file (note again that external SD mmc device number varies) if it
 exists and boot with root=/dev/mmcblk1p1 (see bootargs_SD) is
 
+```
 run bootargs_base bootargs_SD; fatload mmc 0:3 ${loadaddr} uImage
+```
 
 # Patching kernel
 
@@ -177,18 +213,23 @@ https://github.com/kobolabs/Kobo-Reader/tree/master/hw/imx507-aura
 
 The following configuration options have to be enabled
 
+```
 CONFIG_USB_EHCI_ARC_OTG=y
 CONFIG_USB_EHCI_FSL_UTMI=y
+```
 
 It may be desirable to enable additional debugging as well
 
+```
 CONFIG_USB_DEBUG=y
 CONFIG_USB_ANNOUNCE_NEW_DEVICES=y
+```
 
 The system will still hang with "mma7660 sensor triggered ..."
 followed by "usb unpluggged" unless two of the patches identified by
 CazYokoyama are also applied.
 
+```
 --- a/arch/arm/plat-mxc/usb_common.c
 +++ b/arch/arm/plat-mxc/usb_common.c
 @@ -338,7 +338,7 @@ static void usbh1_set_utmi_xcvr(void)
@@ -210,6 +251,7 @@ CazYokoyama are also applied.
                 rc = IRQ_NONE;
         } else if (hcd->driver->irq(hcd) == IRQ_NONE) {
                 rc = IRQ_NONE;
+```
 
 https://github.com/ifly7charlie/XCSoar-Kobo-Build/commits/AX8817X
 https://github.com/brunotl/kernel-kobo-mx50-ntx/commits/master
@@ -226,20 +268,26 @@ from the embedded Debian repo in the jessie release (anything more
 recent than jessie only have 5.x and above).  Add a source file
 to /etc/apt/sources.list.d
 
+```
 deb http://emdebian.org/tools/debian/ jessie main
+```
 
 and add the armhf architecture (the jessie release requires items from
 armhf) and install the 11.7 version of crossbuild-essential-armhf
 
+```bash
 dpkg --add-architecture armhf
 apt-get install -t jessie crossbuild-essential-armhf
+```
 
 The compiler generates unaligned access as it expects the kernel to
 fix them up.  The kernel isn't set to do fixups on itself though (see
 https://community.nxp.com/thread/266293 for details), so this has to be
 turned off by adding an option in Makefile to KBUILD_CFLAGS
 
+```bash
 KBUILD_CFLAGS += -mno-unaligned-access
+```
 
 From more recent versions of Perl is is nessesary to make the
 suggested modification to the kernel/timeconst.pl file as technically
@@ -248,7 +296,9 @@ warnings documentation for details).
 
 The kernel can then be built with the following command
 
+```bash
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- uImage
+```
 
 # Uploading a kernel
 
@@ -256,19 +306,28 @@ The Kobo u-boot bootm command is hacked to run load_ntxkernel if it
 hasn't already been run before and overwrites the kernel we
 downloaded.  Run load_ntxkernel before the download to avoid this.
 
+```
 load_ntxkernel
 loady
 ~+sx -kb uImage
 setenv bootargs console=ttymxc0,115200 rootwait rw no_console_suspend lpj=3997696
 imi
 bootm
+```
+
+```bash
+umount /mnt/onboard
+modprobe g_file_storage file=/dev/mmcblk0p3
+```
 
 The hacked bootm command also adds several additional parameters if
 they are not already set (this can be seen in the kernel log).  This
 includes appending mx50_1GHz to the end which screws up using
 init=/bin/sh in an emergency.  This can be worked around with
 
+```
 init=/bin/sh -c sh
+```
 
 # Serial breakout cable
 
