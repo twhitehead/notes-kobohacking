@@ -269,3 +269,13 @@ includes appending mx50_1GHz to the end which screws up using
 init=/bin/sh in an emergency.  This can be worked around with
 
 init=/bin/sh -c sh
+
+# Serial breakout cable
+
+max draw for usb to serial        -  19mA ( 15mA by meter)
+max draw for usb to serial + kobo - 540mA (532mA by meter)
+
+grey  - +5V
+green - gnd
+red   -
+org   -
