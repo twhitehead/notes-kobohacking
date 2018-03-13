@@ -18,14 +18,51 @@ dd if=config of=/dev/mmcblk0 bs=1024 seek=768 count=128
 
 http://www.cyberciti.biz/hardware/5-linux-unix-commands-for-connecting-to-the-serial-console/
 
+The stty command can be used to configure the serial port if raw
+reading/writing is desired
+
 stty -F /dev/ttyUSB0 115200 raw pass8
-cu -l /dev/ttyUSB0
 
-# Disabling the watchdog
+The cu command gives an old school connection
 
-From the Linux kernel code (pmic_core_i2c.c) it seems you have to send
-command 22 with argument 0xff to the msp430 over the i2c bus (from
-pmic_core_i2c.c).  Probing the bus gives a list of devices
+cu -l /dev/ttyUSB0 -s 115200
+
+or just use screen for something easy
+
+screen /dev/ttyUSB0 115200
+
+ctrl+a k -- quit
+ctrl+a H -- record
+ctrl+a : !!!sx -kb uImage -- upload
+
+Receiving files via rx in Linux requires it to be directly connected.
+If it is through a getty it will fail (due to escaping?).  X-modem
+doesn't have error detection, so always a good idea to check a hash
+after (have had correuption in many larger transfers).
+
+#::respawn:/sbin/getty -L ttymxc0 115200 vt100
+::askfirst:-/bin/sh
+
+# U-boot
+
+The default u-boot environment loads 4MiB from mmcblk0+1MiB and boots
+it with root=/dev/mmcblk0p1.  It seems likely that holding down an
+external button ((e.g., backlight for Glo and Aura) will switch this
+to root=/dev/mmcblk0p2.  This image re-images mmcblk0p1 and mmcblk0p2.
+
+To do more it is nessesary to change bootdelay=0 to bootdelay=1 (or a
+larger number) in the u-boot environment.  This will cause u-boot to
+wait 1 second before running the bootcmd.  If any data is received on
+the serial port in this time, it will drop to the u-boot command line.
+
+## Watchdog
+
+There is a watchdog that will kill your session before you have a
+chance to do much.  From the Linux kernel code (pmic_core_i2c.c) it
+seems you have to send command 22 with argument 0xff to the msp430
+over the i2c bus (from pmic_core_i2c.c) to disable it.
+
+Probing the bus gives a list of devices
 
 i2c probe
 
