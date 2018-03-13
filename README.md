@@ -1,18 +1,19 @@
 # Extracting bits from flash
 
-Kernel from start of flash
+The kernel (assumed <= 4MiB by u-boot loader)
 
-dd if=/dev/mmcblk0 bs=1024 skip=1024
+dd if=/dev/mmcblk0 bs=1024 skip=1024 count=4096
 
-Is a u-boot legacy uImage.  Drop first 64 bytes to get a standard zImage.
+It is a u-boot legacy uImage.  Drop the first 64 bytes to get a
+standard zImage.
 
-U-boot environment block from start of flash
+U-boot (assumed <= 767KiB by layout)
 
-dd if=/dev/mmcblk0 of=config bs=1024 skip=768 count=128
+dd if=/dev/mmcblk0 bs=1024 skip=1 count=767
 
-It can be modified with hexedit and then written back with
+U-boot environment (u-boot code is set for 128KiB)
 
-dd if=config of=/dev/mmcblk0 bs=1024 seek=768 count=128
+dd if=/dev/mmcblk0 bs=1024 skip=768 count=128
 
 # Connecting
 
