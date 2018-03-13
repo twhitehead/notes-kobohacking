@@ -222,7 +222,7 @@ it.
 # Compiling a kernel
 
 The kernel has to be compiled with a 4.x gcc.  This can be obtained
-from the embedded Debian repo in the jessie relase (anything more
+from the embedded Debian repo in the jessie release (anything more
 recent than jessie only have 5.x and above).  Add a source file
 to /etc/apt/sources.list.d
 
@@ -246,7 +246,7 @@ suggested modification to the kernel/timeconst.pl file as technically
 defined(@...) doesn't check to see if the list is empty (see Perl
 warnings documentation for details).
 
-The kernel can then be built with the following command.  
+The kernel can then be built with the following command
 
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- uImage
 
