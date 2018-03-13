@@ -1,3 +1,21 @@
+These are my notes from hacking on my Kobo Aura, and later a Kobo Glo
+too, for the purposes of using it with XCSoar.
+
+When I started with the Aura, I opened it up and soldered a breakout
+cable onto the onboard serial header on the board.  I then made my
+initial connection and did a lot of fooling around/figruing out over
+this serial port using Dangerous Prototypes' Bus Pirate device in
+serial port mode.
+
+Only much later did I figured out how to modify the u-boot environment
+to first boot off of an sd-card if present (see below).  So, when I
+got the Glo, I never bothered soldering onto the serial port.  I just
+installed XCSoar, which gave me telnet root access, modified the
+u-boot, and now the sd-card services as the emergency recovery.
+
+That said, for kernel hacking, it is still nice to have the serial
+port so you can see the boot messages.
+
 # Extracting bits from flash
 
 The kernel (assumed <= 4MiB by u-boot loader)
