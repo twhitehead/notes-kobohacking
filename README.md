@@ -81,6 +81,93 @@ i2c mm 0x43 0x16.1   # msp430 is i2c device 0x43 and 0x16 is the command
 
 In practice though it seems the initial bus probe is sufficient.
 
+## Modifying the environment
+
+The environment is 128KiB and stored a mmcblk0+768KiB.  It consists of
+a (little endian) crc32 checksum followed by a series of NULL
+seperated key=value pairs.  It is NULL padded to the full length
+(minus the checksum).  The checksum is over the values and padding.
+
+A default environment emedded in u-boot (mmcblk0+0x22dd8) is used if
+it does not match.  It has bootdelay=1 set and so can be interrupted.
+A simple way to get into u-boot then is to invalided the checksum.  It
+can then be setup in u-boot and saved with the writeenv command.
+
+It can also be created from a key=value CR separated pairs file
+
+keyvals=""
+while read line; do
+  keyvals="${keyvals}$(echo -n "$line" | xxd -p)00"
+done < config.ascii
+keyvals="${keyvals//$'\n'/}"
+
+padding="00"
+for ((i=0; i<17; i++)); do
+  padding="${padding}${padding}"
+done
+
+output="${keyvals}${padding:${#keyvals}+8}"
+{ crc32 <(echo "$output" | xxd -r -p) | tac -r -s '..'
+  echo "$output"
+} | xxd -r -p > config.raw
+
+dd if=config.raw of=/dev/mmcblk0 bs=1024 seek=768 count=128
+
+Kobo updates will update the u-boot and the kernel areas but does not
+touch the environment.  The default environment normal boots with root
+set to mmcblk0p1.  Holding a specific external button while booting
+(e.g., backlight for Glo and Aura) should switch this to mmcblk0p2.
+
+The default mmcblk0p2 rootfs image re-images mmcblk0p1 and mmcblk0p2.
+
+## A better u-boot
+
+The builtin boot command does the following
+
+mmc read 2 ${loadaddr} 0x800 0x2000
+
+It is possible, however, to directly load a specific image off the
+onboard mnt partition (it has to be FAT as the ext2 commands just
+silently fail on the ext4 filesystem)
+
+fatload mmc 2:3 ${loadaddr} uImage  # internal storage
+
+or a plugged in SD card (the external SD mmc device number varies:
+Aura=0, Glo=1, etc.).  The command `fatls mmc 0:3` with an optional
+directory will list the contents of the file system.  Changing
+
+bootcmd=run bootcmd_mmc
+
+to
+
+bootcmd=run bootargs_base bootargs_mmc; load_ntxkernel; mmc rescan 0; fatload mmc 0:3 ${loadaddr} uImage; bootm
+
+will cause it to use uImage from the FAT formated 3rd partition on the
+external SD disk as the kernel if it exists and fall back to the
+builtin one otherwise.  This gives a way to play with kernels without
+having to open up the Kobo and solder onto the serial port.
+
+An even more powerful option is to have it try and load a u-boot
+script for the external SD drive and execute it.
+
+run bootargs_base bootargs_mmc; load_ntxkernel; mmc rescan 0; fatload mmc 0:3 0x70400000 uScript; source 0x70400000; bootm
+
+The script is assembled using mkImage
+
+mkimage -A arm -O linux -T script -C none -a 0 -e 0 -n 'u-boot script' -d script uScript
+
+The load and source commands fall through if uScript cannot be found,
+and the boot boots as normal.  The advantage here is arbitrary u-boot
+commands can be run.  This means, for example, root=/dev/mmcblk1p3
+could be passed so everything will run off the external SD card making
+it possible to leave the Kobo image entirely untouched.
+
+An example script that optionally override the kernel from a uImage
+file (note again that external SD mmc device number varies) if it
+exists and boot with root=/dev/mmcblk1p1 (see bootargs_SD) is
+
+run bootargs_base bootargs_SD; fatload mmc 0:3 ${loadaddr} uImage
+
 # Patching kernel
 
 The official kobo provided kernel can be downloaded from here
