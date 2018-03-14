@@ -62,9 +62,11 @@ or just use screen for something easy
 screen /dev/ttyUSB0 115200
 ```
 
-ctrl+a k -- quit
-ctrl+a H -- record
-ctrl+a : !!!sx -kb uImage -- upload
+| command                | action |
+|------------------------|--------|
+| C^a k                  | quit   |
+| C^a H                  | record |
+| C^a : !!!sx -kb uImage | upload |
 
 Receiving files via rx in Linux requires it to be directly connected.
 If it is through a getty it will fail (due to escaping?).  X-modem
@@ -430,10 +432,14 @@ init=/bin/sh -c sh
 
 # Serial breakout cable
 
-max draw for usb to serial        -  19mA ( 15mA by meter)
-max draw for usb to serial + kobo - 540mA (532mA by meter)
+| load                 | max draw               |
+|----------------------|------------------------|
+| usb to serial        |  19mA ( 15mA by meter) |
+| usb to serial + kobo | 540mA (532mA by meter) |
 
-grey  - +5V
-green - gnd
-red   -
-org   -
+| color | use |
+|-------|-----|
+| grey  | +5V |
+| green |  0V |
+| red   |     |
+| org   |     |
