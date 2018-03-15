@@ -366,19 +366,30 @@ index 8e1c4cd0ca96..fad1def30d08 100644
 
 The kernel has to be compiled with a 4.x gcc.  This can be obtained
 from the embedded Debian repo in the jessie release (anything more
-recent than jessie only have 5.x and above).  Add a source file
-to /etc/apt/sources.list.d
+recent than jessie only have 5.x and above) or by using the Nix.
+package manager.
+
+To get it via Debian, add a source file to /etc/apt/sources.list.d
 
 ```
 deb http://emdebian.org/tools/debian/ jessie main
 ```
 
 and add the armhf architecture (the jessie release requires items from
-armhf) and install the 11.7 version of crossbuild-essential-armhf
+armhf)  and install  the  11.7  version of  crossbuild-essential-armhf
 
 ```bash
 dpkg --add-architecture armhf
 apt-get install -t jessie crossbuild-essential-armhf
+```
+
+To get it via Nix, install the Nix package manager [as per the
+website](https://nixos.org/nix/) and then build the gcc49 compiler in
+a cross system
+
+```bash
+nix-env -iA nixpkgs.buildPackages.binutils --arg crossSystem '{ config = "armv7l-linux-gnueabihf"; }'
+nix-env -iA nixpkgs.buildPackages.gcc49 --arg crossSystem '{ config = "armv7l-linux-gnueabihf"; }'
 ```
 
 The compiler generates unaligned access as it expects the kernel to
@@ -395,10 +406,16 @@ suggested modification to the kernel/timeconst.pl file as technically
 defined(@...) doesn't check to see if the list is empty (see Perl
 warnings documentation for details).
 
-The kernel can then be built with the following command
+The kernel can then be built with the following command for Debian
 
 ```bash
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- uImage
+```
+
+or for Nix
+
+```bash
+hardeningDisable=all make ARCH=arm CROSS_COMPILE=armv7l-linux-gnueabihf- uImage
 ```
 
 # Uploading a kernel
