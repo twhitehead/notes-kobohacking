@@ -388,8 +388,8 @@ website](https://nixos.org/nix/) and then build the gcc49 compiler in
 a cross system
 
 ```bash
-nix-env -iA nixpkgs.buildPackages.binutils --arg crossSystem '{ config = "armv7l-linux-gnueabihf"; }'
-nix-env -iA nixpkgs.buildPackages.gcc49 --arg crossSystem '{ config = "armv7l-linux-gnueabihf"; }'
+nix-env -iA nixpkgs.buildPackages.binutils --arg crossSystem '{ config = "armv7l-unknown-linux-gnueabihf"; }'
+nix-env -iA nixpkgs.buildPackages.gcc49 --arg crossSystem '{ config = "armv7l-unknown-linux-gnueabihf"; }'
 ```
 
 The compiler generates unaligned access as it expects the kernel to
